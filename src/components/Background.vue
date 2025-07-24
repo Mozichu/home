@@ -1,6 +1,8 @@
 <template>
   <div :class="store.backgroundShow ? 'cover show' : 'cover'">
+    <!-- 图片壁纸 -->
     <img
+      v-if="isImage"
       v-show="store.imgLoadStatus"
       :src="bgUrl"
       class="bg"
@@ -9,6 +11,20 @@
       @error.once="imgLoadError"
       @animationend="imgAnimationEnd"
     />
+    <!-- 视频壁纸 -->
+    <video
+      v-else
+      v-show="store.imgLoadStatus"
+      :src="bgUrl"
+      class="bg"
+      autoplay
+      muted
+      loop
+      playsinline
+      @load="imgLoadComplete"
+      @error.once="imgLoadError"
+      @animationend="imgAnimationEnd"
+    ></video>
     <div :class="store.backgroundShow ? 'gray hidden' : 'gray'" />
     <Transition name="fade" mode="out-in">
       <a
@@ -26,6 +42,7 @@
 <script setup>
 import { mainStore } from "@/store";
 import { Error } from "@icon-park/vue-next";
+import { ref, computed, defineEmits, watch, onMounted, onBeforeUnmount } from 'vue';
 
 const store = mainStore();
 const bgUrl = ref(null);
@@ -36,22 +53,24 @@ const emit = defineEmits(["loadComplete"]);
 // 请依据文件夹内的图片个数修改 Math.random() 后面的第一个数字
 const bgRandom = Math.floor(Math.random() * 10 + 1);
 
+// 判断是否为图片壁纸
+const isImage = computed(() => {
+  return !bgUrl.value.endsWith('.mp4');
+});
+
 // 更换壁纸链接
 const changeBg = (type) => {
-  if (type == 0) {
+  if (type === 0) {
     bgUrl.value = `/images/background${bgRandom}.jpg`;
-  } else if (type == 1) {
+  } else if (type === 1) {
     bgUrl.value = "https://api.dujin.org/bing/1920.php";
-  } else if (type == 2) {
+  } else if (type === 2) {
     bgUrl.value = "https://api.vvhan.com/api/wallpaper/views";
-  } else if (type == 3) {
+  } else if (type === 3) {
     bgUrl.value = "https://api.vvhan.com/api/wallpaper/acg";
-  } else if (type == 4) {
+  } else if (type === 4) {
+    // 新的视频壁纸链接
     bgUrl.value = "https://t.alcy.cc/acg";
-  } else if (type == 5) {
-    bgUrl.value = "https://t.alcy.cc/ycy";
-  } else if (type == 6) {
-    bgUrl.value = "https://t.alcy.cc/ysz";
   }
 };
 
