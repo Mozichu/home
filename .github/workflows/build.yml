@@ -23,25 +23,40 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 安装Node.js
+      # 安装Node.js (不使用npm缓存，因为我们用pnpm)
       - name: Install Node.js
         uses: actions/setup-node@v4.0.0
         with:
           node-version: "18.x"
-          cache: "npm"  # 临时改用npm缓存避免冲突
+          # 移除npm缓存配置，避免寻找npm锁文件
 
-      # 安装pnpm（使用更可靠的安装方式）
+      # 安装pnpm
       - name: Install pnpm
         run: |
           npm install -g pnpm@latest
-          pnpm --version  # 验证安装成功并显示版本
+          pnpm --version  # 验证安装成功
         shell: bash
 
-      # 验证pnpm是否在PATH中
-      - name: Verify pnpm installation
+      # 配置pnpm缓存
+      - name: Setup pnpm cache
+        uses: actions/cache@v3
+        with:
+          path: ~/.pnpm-store
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      # 验证pnpm和锁文件
+      - name: Verify environment
         run: |
           echo "PNPM version: $(pnpm --version)"
-          echo "PNPM path: $(which pnpm)"
+          echo "Checking for pnpm lock file:"
+          if [ -f "pnpm-lock.yaml" ]; then
+            echo "pnpm-lock.yaml found"
+          else
+            echo "Error: pnpm-lock.yaml not found"
+            exit 1
+          fi
         shell: bash
 
       # 准备环境变量
