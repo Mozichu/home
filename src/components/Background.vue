@@ -10,17 +10,19 @@
       @error.once="imgLoadError"
       @animationend="imgAnimationEnd"
     />
-    <video
-      v-show="!isImage && store.imgLoadStatus"
-      :src="bgUrl || '/images/background1.jpg'"
-      class="bg bg-video"
-      autoplay
-      muted
-      loop
-      playsinline
-      @loadeddata="imgLoadComplete"
-      @error.once="imgLoadError"
-      @animationend="imgAnimationEnd"
+<video
+  v-show="!isImage && store.imgLoadStatus"
+  :src="bgUrl"
+  class="bg bg-video"
+  autoplay
+  muted
+  loop
+  playsinline
+  crossorigin="anonymous"  <!-- 解决跨域问题 -->
+  type="video/mp4"         <!-- 明确视频类型 -->
+  @loadeddata="imgLoadComplete"
+  @error.once="imgLoadError"
+  @animationend="imgAnimationEnd"
     ></video>
     <div :class="store.backgroundShow ? 'gray hidden' : 'gray'" />
     <Transition name="fade" mode="out-in">
@@ -51,6 +53,16 @@ const emit = defineEmits(["loadComplete"]);
 // 壁纸随机数
 const bgRandom = Math.floor(Math.random() * 10 + 1);
 
+// 在Background.vue的<script setup>中
+const isImage = computed(() => {
+// 明确type=4（ACG动画）为视频
+  if (store.coverType === 4) {
+    return false;
+  }
+// 其他类型仍通过URL后缀判断
+  return bgUrl.value?.endsWith('.mp4') === false;
+});
+  
 // 修改后的 isImage 计算属性
 const isImage = computed(() => {
   return bgUrl.value?.endsWith('.mp4') === false;
@@ -89,17 +101,20 @@ const imgAnimationEnd = () => {
   emit("loadComplete");
 };
 
-// 图片或视频显示失败
+// 修改imgLoadError函数，针对视频类型单独处理
 const imgLoadError = () => {
   console.error("壁纸或视频加载失败：", bgUrl.value);
   ElMessage({
-    message: "壁纸或视频加载失败，已临时切换回默认",
-    icon: h(Error, {
-      theme: "filled",
-      fill: "#efefef",
-    }),
+    message: "壁纸或视频加载失败，已尝试切换格式",
+    icon: h(Error, { theme: "filled", fill: "#efefef" }),
   });
-  bgUrl.value = `/images/background${bgRandom}.jpg`;
+
+  // 若为视频类型（type=4），尝试强制切换为已知有效视频链接
+  if (store.coverType === 4) {
+    bgUrl.value = "https://t.alcy.cc/acg?format=mp4"; // 假设添加参数可强制返回MP4
+  } else {
+    bgUrl.value = `/images/background${bgRandom}.jpg`;
+  }
 };
 
 // 监听壁纸切换
