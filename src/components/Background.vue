@@ -40,7 +40,7 @@
 import { mainStore } from "@/store";
 import { Error } from "@icon-park/vue-next";
 import { ref, computed, defineEmits, watch, onMounted, onBeforeUnmount } from 'vue';
-import { ElMessage } from 'element - plus';
+import { ElMessage } from 'element-plus';
 import { h } from 'vue'; 
 
 const store = mainStore();
