@@ -3,41 +3,48 @@ name: Build and Deploy
 
 on:
   push:
-    branches:
-      - dev
-      - master
+    branches: [dev, master]
   pull_request:
-    branches:
-      - dev
-      - master
+    branches: [dev, master]
 
 jobs:
   build:
     name: Build Website
     runs-on: ubuntu-latest
+    env:
+      # 开启详细日志模式
+      DEBUG: true
+      NODE_ENV: production
 
     steps:
-      # 检出Git仓库
       - name: Check out git repository
         uses: actions/checkout@v4.1.1
         with:
           fetch-depth: 0
 
-      # 安装Node.js (不使用npm缓存，因为我们用pnpm)
+      - name: Show runner environment info
+        run: |
+          echo "Runner OS: $RUNNER_OS"
+          echo "Node.js version: $(node -v || true)"
+          echo "npm version: $(npm -v || true)"
+          echo "pnpm version: $(pnpm -v || true)"
+          echo "Current directory: $(pwd)"
+          echo "Directory contents: $(ls -la)"
+        shell: bash
+
       - name: Install Node.js
         uses: actions/setup-node@v4.0.0
         with:
           node-version: "18.x"
-          # 移除npm缓存配置，避免寻找npm锁文件
 
-      # 安装pnpm
       - name: Install pnpm
         run: |
+          echo "Installing pnpm..."
           npm install -g pnpm@latest
-          pnpm --version  # 验证安装成功
+          echo "pnpm installed. Version: $(pnpm --version)"
         shell: bash
+        continue-on-error: false  # 安装失败直接终止
 
-      # 配置pnpm缓存
       - name: Setup pnpm cache
         uses: actions/cache@v3
         with:
@@ -46,52 +53,65 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
 
-      # 验证pnpm和锁文件
-      - name: Verify environment
+      - name: Verify project files
         run: |
-          echo "PNPM version: $(pnpm --version)"
-          echo "Checking for pnpm lock file:"
-          if [ -f "pnpm-lock.yaml" ]; then
-            echo "pnpm-lock.yaml found"
-          else
-            echo "Error: pnpm-lock.yaml not found"
-            exit 1
-          fi
+          echo "Checking critical files..."
+          [ -f "package.json" ] && echo "package.json exists" || { echo "Error: package.json missing"; exit 1; }
+          [ -f "pnpm-lock.yaml" ] && echo "pnpm-lock.yaml exists" || { echo "Error: pnpm-lock.yaml missing"; exit 1; }
+          echo "package.json contents: $(cat package.json | jq '.scripts')"  # 显示关键脚本配置
         shell: bash
+        continue-on-error: false
 
-      # 准备环境变量
       - name: Prepare environment variables
         run: |
+          echo "Preparing .env file..."
           if [ ! -f .env ]; then
             if [ -f .env.example ]; then
-              cp .env.example .env
-              echo "Copied .env.example to .env"
+              cp .env.example .env && echo "Copied .env.example to .env"
             else
               echo "Warning: .env.example not found, creating empty .env"
               touch .env
             fi
-          else
-            echo ".env file already exists, skipping copy"
           fi
+          echo "Env file contents (sanitized):"
+          grep -v -E 'API_KEY|TOKEN|PASSWORD' .env || true  # 隐藏敏感信息
+        shell: bash
 
-      # 安装项目依赖
-      - name: Install dependencies
-        run: pnpm install
-        env:
-          NODE_ENV: development
+      - name: Install dependencies (with debug)
+        run: |
+          echo "Installing dependencies..."
+          pnpm install --verbose  # 详细输出安装过程
+        shell: bash
+        continue-on-error: false  # 依赖安装失败终止
 
-      # 代码检查
-      - name: Lint code
-        run: pnpm lint || echo "Lint warnings found but continuing build"
+      - name: Lint code (with error details)
+        run: |
+          echo "Running lint..."
+          if ! pnpm lint; then
+            echo "Lint failed. Detailed output:"
+            pnpm lint -- --debug  # 输出详细错误
+            echo "Continuing build despite lint errors"  # 暂时忽略lint错误继续构建
+          fi
+        shell: bash
+        continue-on-error: true  # 允许lint失败继续执行
 
-      # 构建项目
-      - name: Build website
-        run: pnpm build
-        env:
-          NODE_ENV: production
-          GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+      - name: Build website (with debug)
+        run: |
+          echo "Starting build..."
+          echo "Node.js version: $(node -v)"
+          echo "Build command: pnpm build"
+          pnpm build --debug  # 构建时输出调试信息
+        shell: bash
+        continue-on-error: false  # 构建失败终止
 
-      # 上传构建产物
+      - name: Verify build output
+        run: |
+          echo "Checking build output..."
+          [ -d "dist" ] && echo "dist directory exists" || { echo "Error: dist directory missing after build"; exit 1; }
+          echo "dist directory contents: $(ls -la dist)"
+        shell: bash
+        continue-on-error: false
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -99,6 +119,7 @@ jobs:
           path: dist/
           retention-days: 7
 
+  # 部署步骤保持不变
   deploy-preview:
     name: Deploy Preview
     needs: build
@@ -112,9 +133,7 @@ jobs:
           path: dist/
 
       - name: Deploy to preview
-        run: |
-          echo "Deploying preview build to staging environment"
-          # 添加实际部署命令
+        run: echo "Deploying preview build"
 
   deploy-production:
     name: Deploy Production
@@ -129,6 +148,4 @@ jobs:
           path: dist/
 
       - name: Deploy to production
-        run: |
-          echo "Deploying production build"
-          # 添加实际部署命令
+        run: echo "Deploying production build"
