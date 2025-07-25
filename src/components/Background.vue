@@ -62,11 +62,6 @@ const isImage = computed(() => {
 // 其他类型仍通过URL后缀判断
   return bgUrl.value?.endsWith('.mp4') === false;
 });
-  
-// 修改后的 isImage 计算属性
-const isImage = computed(() => {
-  return bgUrl.value?.endsWith('.mp4') === false;
-});
 
 // 更换壁纸链接
 const changeBg = (type) => {
