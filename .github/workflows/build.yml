@@ -1,51 +1,116 @@
-# Dev 分支推送部署预览
-## 仅部署 Win 端
-name: Build Dev
+# 多环境构建与部署部署工作流
+name: Build and Deploy
 
 on:
   push:
     branches:
       - dev
       - master
+  pull_request:
+    branches:
+      - dev
+      - master
 
 jobs:
-  release:
+  build:
     name: Build Website
-    runs-on: windows-latest
+    runs-on: ubuntu-latest  # 使用更高效的Ubuntu环境，兼容pnpm
 
     steps:
-      # 检出 Git 仓库
+      # 检出Git仓库
       - name: Check out git repository
         uses: actions/checkout@v4.1.1
-      # 安装 Node.js
+        with:
+          fetch-depth: 0  # 确保完整检出历史
+
+      # 安装Node.js
       - name: Install Node.js
         uses: actions/setup-node@v4.0.0
         with:
           node-version: "18.x"
-      # 复制环境变量文件
-      - name: Copy .env.example
-        run: |
-          if (-not (Test-Path .env)) {
-            Copy-Item .env.example .env
-          } else {
-            Write-Host ".env file already exists. Skipping the copy step."
-          }
-      # 安装项目依赖
+          cache: "pnpm"  # 缓存pnpm依赖，加速构建
+
+      # 安装pnpm
       - name: Install pnpm
         uses: pnpm/action-setup@v2
         with:
-        version: latest
+          version: latest
+          run_install: false
 
-      - name: Install Dependencies
-      run: pnpm install
-      # 构建程序
-      - name: Build Website
+      # 复制环境变量文件
+      - name: Prepare environment variables
+        run: |
+          if [ ! -f .env ]; then
+            if [ -f .env.example ]; then
+              cp .env.example .env
+              echo "Copied .env.example to .env"
+            else
+              echo "Warning: .env.example not found, creating empty .env"
+              touch .env
+            fi
+          else
+            echo ".env file already exists, skipping copy"
+          fi
+
+      # 安装项目依赖
+      - name: Install dependencies
+        run: pnpm install
+        env:
+          NODE_ENV: development
+
+      # 代码检查
+      - name: Lint code
+        run: pnpm lint
+
+      # 构建项目
+      - name: Build website
         run: pnpm build
         env:
+          NODE_ENV: production
           GITHUB_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
       # 上传构建产物
-      - name: Upload artifacts
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: Home
-          path: dist
+          name: home-build-${{ github.sha }}
+          path: dist/
+          retention-days: 7  # 保留7天构建产物
+
+  deploy-preview:
+    name: Deploy Preview
+    needs: build
+    if: github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: home-build-${{ github.sha }}
+          path: dist/
+
+      # 这里可以添加预览环境部署步骤
+      # 例如部署到Netlify/Vercel或服务器预览环境
+      - name: Deploy to preview
+        run: |
+          echo "Deploying preview build to staging environment"
+          # 实际部署命令根据需求添加
+
+  deploy-production:
+    name: Deploy Production
+    needs: build
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: home-build-${{ github.sha }}
+          path: dist/
+
+      # 这里可以添加生产环境部署步骤
+      # 例如部署到正式服务器或CDN
+      - name: Deploy to production
+        run: |
+          echo "Deploying production build"
+          # 实际部署命令根据需求添加
