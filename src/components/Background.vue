@@ -1,27 +1,24 @@
 <template>
   <div :class="store.backgroundShow ? 'cover show' : 'cover'">
-    <!-- 图片壁纸 -->
+    <!-- 使用 v-show 而不是 v-if 来避免组件频繁销毁和重建 -->
     <img
-      v-if="isImage"
-      v-show="store.imgLoadStatus"
-      :src="bgUrl"
+      v-show="isImage && store.imgLoadStatus"
+      :src="bgUrl || '/images/background1.jpg'"
       class="bg"
       alt="cover"
       @load="imgLoadComplete"
       @error.once="imgLoadError"
       @animationend="imgAnimationEnd"
     />
-    <!-- 视频壁纸 -->
     <video
-      v-else
-      v-show="store.imgLoadStatus"
-      :src="bgUrl"
-      class="bg"
+      v-show="!isImage && store.imgLoadStatus"
+      :src="bgUrl || '/images/background1.jpg'"
+      class="bg bg-video"
       autoplay
       muted
       loop
       playsinline
-      @load="imgLoadComplete"
+      @loadeddata="imgLoadComplete"
       @error.once="imgLoadError"
       @animationend="imgAnimationEnd"
     ></video>
@@ -30,7 +27,7 @@
       <a
         v-if="store.backgroundShow && store.coverType != '3'"
         class="down"
-        :href="bgUrl"
+        :href="bgUrl || '/images/background1.jpg'"
         target="_blank"
       >
         下载壁纸
@@ -43,6 +40,7 @@
 import { mainStore } from "@/store";
 import { Error } from "@icon-park/vue-next";
 import { ref, computed, defineEmits, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ElMessage, h } from 'element-plus';
 
 const store = mainStore();
 const bgUrl = ref(null);
@@ -50,16 +48,16 @@ const imgTimeout = ref(null);
 const emit = defineEmits(["loadComplete"]);
 
 // 壁纸随机数
-// 请依据文件夹内的图片个数修改 Math.random() 后面的第一个数字
 const bgRandom = Math.floor(Math.random() * 10 + 1);
 
-// 判断是否为图片壁纸
+// 修改后的 isImage 计算属性
 const isImage = computed(() => {
-  return !bgUrl.value.endsWith('.mp4');
+  return bgUrl.value?.endsWith('.mp4') === false;
 });
 
 // 更换壁纸链接
 const changeBg = (type) => {
+  console.log('Changing background type to:', type);
   if (type === 0) {
     bgUrl.value = `/images/background${bgRandom}.jpg`;
   } else if (type === 1) {
@@ -69,13 +67,13 @@ const changeBg = (type) => {
   } else if (type === 3) {
     bgUrl.value = "https://api.vvhan.com/api/wallpaper/acg";
   } else if (type === 4) {
-    // 新的视频壁纸链接
     bgUrl.value = "https://t.alcy.cc/acg";
   }
 };
 
-// 图片加载完成
+// 图片或视频加载完成
 const imgLoadComplete = () => {
+  console.log('Media loaded:', bgUrl.value);
   imgTimeout.value = setTimeout(
     () => {
       store.setImgLoadStatus(true);
@@ -84,18 +82,17 @@ const imgLoadComplete = () => {
   );
 };
 
-// 图片动画完成
+// 图片或视频动画完成
 const imgAnimationEnd = () => {
-  console.log("壁纸加载且动画完成");
-  // 加载完成事件
+  console.log("壁纸或视频加载且动画完成");
   emit("loadComplete");
 };
 
-// 图片显示失败
+// 图片或视频显示失败
 const imgLoadError = () => {
-  console.error("壁纸加载失败：", bgUrl.value);
+  console.error("壁纸或视频加载失败：", bgUrl.value);
   ElMessage({
-    message: "壁纸加载失败，已临时切换回默认",
+    message: "壁纸或视频加载失败，已临时切换回默认",
     icon: h(Error, {
       theme: "filled",
       fill: "#efefef",
@@ -108,11 +105,14 @@ const imgLoadError = () => {
 watch(
   () => store.coverType,
   (value) => {
+    console.log('Cover type changed to:', value);
     changeBg(value);
   },
+  { immediate: true } // 立即执行一次，确保初始化时加载正确的壁纸
 );
 
 onMounted(() => {
+  console.log('Background component mounted');
   // 加载壁纸
   changeBg(store.coverType);
 });
@@ -151,6 +151,17 @@ onBeforeUnmount(() => {
     animation: fade-blur-in 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
     animation-delay: 0.45s;
   }
+
+  .bg-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: -1;
+  }
+
   .gray {
     opacity: 1;
     position: absolute;
@@ -167,6 +178,7 @@ onBeforeUnmount(() => {
       transition: 1.5s;
     }
   }
+
   .down {
     font-size: 16px;
     color: white;
